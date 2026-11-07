@@ -1,0 +1,351 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with roles for fine-grained access control",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["customer", "partner", "admin"]
+        },
+        "partnerCategory": {
+          "type": "string",
+          "enum": ["shopping", "travel", "restaurant", "other", "all"]
+        },
+        "phone": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "suspended"]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "2-tier categorized customer inquiry with partner routing and AI-driven telemetry",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parentCategory": {
+          "type": "string",
+          "enum": ["shopping", "travel", "restaurant", "other"]
+        },
+        "subCategory": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 2
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 3000,
+          "minLength": 5
+        },
+        "authorId": {
+          "type": "string"
+        },
+        "authorName": {
+          "type": "string"
+        },
+        "authorEmail": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "routing", "replied"]
+        },
+        "assignedPartnerId": {
+          "type": "string",
+          "description": "The partner ID if the inquiry is pre-affiliated or routed"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reply": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "maxLength": 3000
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "repliedBy": {
+              "type": "string"
+            },
+            "repliedByName": {
+              "type": "string"
+            }
+          },
+          "required": ["content", "createdAt", "repliedBy", "repliedByName"]
+        },
+        "aiAnalysis": {
+          "type": "object",
+          "properties": {
+            "sentiment": {
+              "type": "string",
+              "enum": ["positive", "neutral", "negative", "urgent"]
+            },
+            "summarizedNeed": {
+              "type": "string"
+            },
+            "suggestedResponse": {
+              "type": "string"
+            }
+          }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "size": { "type": "number" },
+              "type": { "type": "string" },
+              "dataUrl": { "type": "string" }
+            },
+            "required": ["name", "dataUrl"]
+          }
+        },
+        "satisfaction": {
+          "type": "object",
+          "properties": {
+            "rating": {
+              "type": "string",
+              "enum": ["helpful", "more_info"]
+            },
+            "submittedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "feedback": {
+              "type": "string"
+            }
+          },
+          "required": ["rating"]
+        }
+      },
+      "required": ["id", "parentCategory", "subCategory", "title", "content", "authorId", "authorName", "authorEmail", "status", "createdAt", "updatedAt"]
+    },
+    "HubInquiry": {
+      "title": "HubInquiry",
+      "description": "Standardized, highly detailed resolution guide in the public Inquiry Knowledge Hub",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["shopping", "leisure", "dining", "general", "legal", "other"]
+        },
+        "categoryLabel": {
+          "type": "string"
+        },
+        "iconName": {
+          "type": "string"
+        },
+        "subCategory": {
+          "type": "string"
+        },
+        "rankBadge": {
+          "type": "string"
+        },
+        "resolutionRate": {
+          "type": "number"
+        },
+        "avgResolutionTime": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "questionScenario": {
+          "type": "string",
+          "maxLength": 3000
+        },
+        "officialAnswer": {
+          "type": "object"
+        },
+        "tags": {
+          "type": "array"
+        },
+        "requiredDocs": {
+          "type": "array"
+        },
+        "directInquiryPrefill": {
+          "type": "object"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["published", "draft", "archived"]
+        },
+        "isAIGenerated": {
+          "type": "boolean"
+        },
+        "viewCount": {
+          "type": "number"
+        },
+        "helpfulCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "category", "title", "questionScenario", "status"]
+    },
+    "HubUnansweredLog": {
+      "title": "HubUnansweredLog",
+      "description": "Search query that yielded zero results in InquiryHub for automated AI expansion",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "count": {
+          "type": "number"
+        },
+        "lastSearchedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resolved": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "query", "count"]
+    },
+    "PartnerBrand": {
+      "title": "PartnerBrand",
+      "description": "Official brand CS hotlines partnered with ModuInquire",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "logoEmoji": { "type": "string", "maxLength": 10 },
+        "intro": { "type": "string", "maxLength": 1000 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "chatUrl": { "type": "string", "maxLength": 300 },
+        "avgResponse": { "type": "string", "maxLength": 100 },
+        "color": { "type": "string", "maxLength": 20 },
+        "popularInquiry": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "phone", "category"]
+    },
+    "AIConsumerInsight": {
+      "title": "AIConsumerInsight",
+      "description": "AI compiled consumer protection guidelines and legal base",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "emoji": { "type": "string", "maxLength": 10 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "lawBasis": { "type": "string", "maxLength": 500 },
+        "fullTip": { "type": "string", "maxLength": 3000 },
+        "badge": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "summary", "lawBasis", "fullTip", "badge"]
+    },
+    "PublicAlert": {
+      "title": "PublicAlert",
+      "description": "National consumer alerts, public notices, and action guidelines",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "categoryLabel": { "type": "string" },
+        "badgeText": { "type": "string" },
+        "urgency": { "type": "string", "enum": ["high", "medium", "normal"] },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "institution": { "type": "string" },
+        "effectiveDate": { "type": "string" },
+        "keyPoints": { "type": "array" },
+        "actionGuide": { "type": "array" },
+        "lawBasis": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "viewCount": { "type": "number" },
+        "shareCount": { "type": "number" },
+        "pinned": { "type": "boolean" }
+      },
+      "required": ["id", "category", "title", "summary"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Unified accounts database"
+    },
+    "inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Centralized global inquiries ledger"
+    },
+    "hub_inquiries/{inquiryId}": {
+      "schema": "HubInquiry",
+      "description": "Permanent master knowledge hub inquiries and AI generated solutions"
+    },
+    "hub_unanswered_logs/{logId}": {
+      "schema": "HubUnansweredLog",
+      "description": "Telemetry logs of unanswered visitor queries to discover new AI hub topics"
+    },
+    "partners/{partnerId}": {
+      "schema": "PartnerBrand",
+      "description": "Partners CS Hotlines"
+    },
+    "consumer_insights/{insightId}": {
+      "schema": "AIConsumerInsight",
+      "description": "AI Trend Consumer Insights"
+    },
+    "public_alerts/{alertId}": {
+      "schema": "PublicAlert",
+      "description": "National Public Consumer Notices"
+    }
+  }
+}

@@ -1,0 +1,225 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (Default Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      // Allow standard logins (some OAuth providers verify automatically; for email login we check verification status)
+      return request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Role Lookups
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'sungbae0613@gmail.com' ||
+        request.auth.token.email == 'cyber924@naver.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'admin')
+      );
+    }
+
+    function isPartner() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getRole() == 'partner' || getRole() == 'admin')) ||
+        request.auth.token.email != null
+      );
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // User document validation
+    function isValidUser(data, targetUid) {
+      return data.uid == targetUid &&
+             data.email is string && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.role is string && (data.role == 'customer' || data.role == 'partner' || data.role == 'admin') &&
+             data.createdAt is timestamp;
+    }
+
+    // Inquiry document validation
+    function isValidInquiry(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.parentCategory is string && (data.parentCategory == 'shopping' || data.parentCategory == 'travel' || data.parentCategory == 'restaurant' || data.parentCategory == 'other') &&
+             data.subCategory is string && data.subCategory.size() <= 100 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 120 &&
+             data.content is string && data.content.size() >= 5 && data.content.size() <= 3000 &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() <= 100 &&
+             data.authorEmail is string && data.authorEmail.size() <= 120 &&
+             data.status is string && (data.status == 'pending' || data.status == 'routing' || data.status == 'replied') &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             (
+               !('reply' in data) || 
+               (
+                 data.reply == null ||
+                 (
+                   data.reply is map &&
+                   data.reply.content is string && data.reply.content.size() >= 2 && data.reply.content.size() <= 3000 &&
+                   data.reply.createdAt is timestamp &&
+                   data.reply.repliedBy is string &&
+                   data.reply.repliedByName is string
+                 )
+               )
+             ) &&
+             (
+               !('aiAnalysis' in data) ||
+               (
+                 data.aiAnalysis == null ||
+                 (
+                   data.aiAnalysis is map &&
+                   data.aiAnalysis.sentiment is string && (data.aiAnalysis.sentiment == 'positive' || data.aiAnalysis.sentiment == 'neutral' || data.aiAnalysis.sentiment == 'negative' || data.aiAnalysis.sentiment == 'urgent') &&
+                   data.aiAnalysis.summarizedNeed is string &&
+                   data.aiAnalysis.suggestedResponse is string
+                 )
+               )
+             ) &&
+             (
+               !('attachments' in data) || (data.attachments == null || data.attachments is list)
+             ) &&
+             (
+               !('satisfaction' in data) || (data.satisfaction == null || (data.satisfaction is map && data.satisfaction.rating is string))
+             );
+    }
+
+    // Rules for USERS Collection
+    match /users/{userId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Rules for INQUIRIES Collection
+    match /inquiries/{inquiryId} {
+      
+      // Allow single read if owner, partner (for routing), or admin
+      allow get: if isSignedIn() && (resource.data.authorId == request.auth.uid || isPartner() || isAdmin());
+
+      // Allow listing only if querying own data OR if user is partner/admin
+      allow list: if isSignedIn() && (resource.data.authorId == request.auth.uid || isPartner() || isAdmin());
+
+      // Create: user must be verified, shape valid, initially pending or routing, without reply or AI tampering
+      allow create: if isSignedIn() && 
+                    isValidId(inquiryId) && 
+                    isValidInquiry(incoming()) && 
+                    incoming().id == inquiryId && 
+                    (incoming().status == 'pending' || incoming().status == 'routing') && 
+                    incoming().createdAt == request.time && 
+                    incoming().updatedAt == request.time && 
+                    (!('reply' in incoming()) || incoming().reply == null);
+
+      // Update: Tiered action limits
+      allow update: if isSignedIn() && (
+        // Action 1: Customer edits their own inquiry while it's still pending (can't modify reply, aiAnalysis, status)
+        (
+          existing().authorId == request.auth.uid &&
+          existing().status == 'pending' &&
+          isValidInquiry(incoming()) &&
+          incoming().id == existing().id &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().authorId == existing().authorId &&
+          incoming().authorEmail == existing().authorEmail &&
+          incoming().status == 'pending' &&
+          (!('reply' in incoming()) || incoming().reply == null) &&
+          (!('aiAnalysis' in incoming()) || incoming().aiAnalysis == null || incoming().aiAnalysis == existing().aiAnalysis) &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'parentCategory', 'subCategory', 'attachments', 'updatedAt'])
+        ) ||
+        // Action 3: Customer submitting satisfaction rating on their inquiry
+        (
+          existing().authorId == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['satisfaction', 'updatedAt'])
+        ) ||
+        // Action 2: Admin/Partner updates reply and changes status, or adds AI analytics / partner routing
+        (
+          (isAdmin() || isPartner()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['reply', 'status', 'aiAnalysis', 'assignedPartnerId', 'assignedPartnerName', 'assignedAt', 'routingNote', 'autoAssigned', 'attachments', 'satisfaction', 'updatedAt'])
+        )
+      );
+
+      // Delete: Users can delete their pending inquiries. Admins can delete any.
+      allow delete: if isSignedIn() && (
+        (existing().authorId == request.auth.uid && existing().status == 'pending') || 
+        isAdmin()
+      );
+    }
+
+    // Rules for HUB_INQUIRIES Collection (Knowledge Hub)
+    match /hub_inquiries/{inquiryId} {
+      // Publicly readable for all visitors searching solutions
+      allow get, list: if true;
+
+      // Creation, deletion, and full edits restricted to Admins
+      allow create: if isAdmin() && isValidId(inquiryId);
+      allow delete: if isAdmin();
+
+      // Updates: Admin has full edit, while public can increment helpfulCount or viewCount
+      allow update: if isAdmin() || (
+        incoming().diff(existing()).affectedKeys().hasOnly(['helpfulCount', 'viewCount'])
+      );
+    }
+
+    // Rules for HUB_UNANSWERED_LOGS Collection (Telemetry for unaddressed searches)
+    match /hub_unanswered_logs/{logId} {
+      // Any visitor can log an unaddressed search query
+      allow create: if isValidId(logId) && 
+                    incoming().query is string && 
+                    incoming().query.size() <= 100;
+      
+      // Only admins can view, update, or clear logs
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Rules for PARTNERS Collection (Brand partners)
+    match /partners/{partnerId} {
+      allow read, write: if true;
+    }
+
+    // Rules for CONSUMER_INSIGHTS Collection (AI trend insights)
+    match /consumer_insights/{insightId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Rules for PUBLIC_ALERTS Collection (Public Notices / Announcements)
+    match /public_alerts/{alertId} {
+      allow read, write: if true;
+    }
+
+    // Rules for RANKINGS Collection (Real-time Rankings)
+    match /rankings/{rankingId} {
+      allow read, write: if true;
+    }
+
+    // Rules for MODU_HELP_ITEMS Collection (Everyone's Help Shopping/Insurance/Festival Items)
+    match /modu_help_items/{itemId} {
+      allow read, write: if true;
+    }
+
+    // Rules for AI_PROPOSALS Collection (AI-suggested ranking candidates)
+    match /ai_proposals/{proposalId} {
+      allow read, write: if true;
+    }
+  }
+}

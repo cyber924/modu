@@ -1,0 +1,6 @@
+{
+  "name": "모두의문의",
+  "description": "국민 안심 소비자 권리 지킴이이자 1,000개 이상의 AI 정답 가이드를 담은 대한민국 대표 문의 해결 허브 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
